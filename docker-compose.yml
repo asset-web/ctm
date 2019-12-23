@@ -1,0 +1,64 @@
+version: "3.7"
+
+services:
+  django:
+    restart: always
+    depends_on:
+      - postgres
+      - redis
+    build: ./django
+    expose:
+      - "8000"
+    links:
+      - postgres:postgres
+      - redis:redis
+    volumes:
+      - django-log:/srv/check_the_map/log
+      - web-root:/srv/check_the_map/static
+      - ./django:/srv/check_the_map/src/ctm
+    # env_file: .env  # TODO
+    environment:
+      DEBUG: "True"
+    command: bash -c "/srv/check_the_map/bin/python manage.py collectstatic --no-input && /srv/check_the_map/bin/python manage.py migrate && /srv/check_the_map/bin/gunicorn ctm.wsgi:application -w 2 -b :8000"
+
+  nginx:
+    restart: always
+    build: ./nginx/
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # - ./nginx/certs:/etc/pki/tls/certs/:ro
+      # - ./nginx/private:/etc/pki/tls/private/:ro
+      - nginx-logs:/var/log/nginx
+      - web-root:/www/static
+    links:
+      - django:django
+
+  postgres:
+    restart: always
+    image: postgres:12.1
+    environment:
+      POSTGRES_PASSWORD: example_dev_db_passwd
+      POSTGRES_USER: ctm
+      POSTGRES_DB: ctm 
+    shm_size: '256mb'
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    restart: always
+    image: redis:5.0.7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  django-log:
+  nginx-logs:
+  postgres-data:
+  redis-data:
+  web-root:
